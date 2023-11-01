@@ -1,0 +1,1965 @@
+From 8501eb89584b2ad51d3a8e21c8235a81ce01b871 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
+Date: Tue, 26 Jun 2018 19:12:18 +0200
+Subject: [PATCH 1/4] Make dblatex compatible with Python 3
+
+---
+ lib/dbtexmf/core/commander.py             |  3 +-
+ lib/dbtexmf/core/confparser.py            | 18 +++--
+ lib/dbtexmf/core/dbtex.py                 | 99 ++++++++++++++---------
+ lib/dbtexmf/core/error.py                 |  4 +-
+ lib/dbtexmf/core/imagedata.py             | 28 ++++---
+ lib/dbtexmf/core/sgmlxml.py               | 11 +--
+ lib/dbtexmf/core/txtparser.py             |  5 +-
+ lib/dbtexmf/core/xmlparser.py             |  2 +-
+ lib/dbtexmf/dblatex/dblatex.py            |  4 +-
+ lib/dbtexmf/dblatex/grubber/bibtex.py     | 21 ++---
+ lib/dbtexmf/dblatex/grubber/bibtopic.py   |  4 +-
+ lib/dbtexmf/dblatex/grubber/dvips.py      |  6 +-
+ lib/dbtexmf/dblatex/grubber/index.py      | 35 ++++----
+ lib/dbtexmf/dblatex/grubber/latex.py      | 15 ++--
+ lib/dbtexmf/dblatex/grubber/logparser.py  |  7 +-
+ lib/dbtexmf/dblatex/grubber/makeidx.py    |  2 +-
+ lib/dbtexmf/dblatex/grubber/maker.py      |  5 +-
+ lib/dbtexmf/dblatex/grubber/msg.py        | 23 +++---
+ lib/dbtexmf/dblatex/grubber/pdftex.py     |  7 +-
+ lib/dbtexmf/dblatex/grubber/plugins.py    | 16 ++--
+ lib/dbtexmf/dblatex/grubber/ps2pdf.py     |  6 +-
+ lib/dbtexmf/dblatex/grubber/texbuilder.py |  8 +-
+ lib/dbtexmf/dblatex/grubber/util.py       |  6 +-
+ lib/dbtexmf/dblatex/grubber/xetex.py      |  2 +-
+ lib/dbtexmf/dblatex/grubber/xr-hyper.py   |  8 +-
+ lib/dbtexmf/dblatex/rawparse.py           | 12 +--
+ lib/dbtexmf/dblatex/rawtex.py             | 21 ++---
+ lib/dbtexmf/dblatex/rawverb.py            | 50 ++++++------
+ lib/dbtexmf/dblatex/runtex.py             | 13 +--
+ lib/dbtexmf/dblatex/texcodec.py           | 47 ++++++-----
+ lib/dbtexmf/dblatex/texhyphen.py          | 22 ++---
+ lib/dbtexmf/dblatex/xetex/codec.py        |  2 +-
+ lib/dbtexmf/dblatex/xetex/fcfallback.py   | 10 ++-
+ lib/dbtexmf/dblatex/xetex/fcmanager.py    |  3 +
+ lib/dbtexmf/dblatex/xetex/fontspec.py     |  4 +-
+ lib/dbtexmf/dblatex/xetex/fsconfig.py     |  4 +-
+ lib/dbtexmf/dblatex/xetex/fsencoder.py    |  8 +-
+ lib/dbtexmf/xslt/4xslt.py                 |  3 +-
+ lib/dbtexmf/xslt/xsltproc.py              |  3 +
+ setup.py                                  | 53 ++++++------
+ 40 files changed, 337 insertions(+), 263 deletions(-)
+
+diff --git a/lib/dbtexmf/core/commander.py b/lib/dbtexmf/core/commander.py
+index 6319200..5efa074 100644
+--- a/lib/dbtexmf/core/commander.py
++++ b/lib/dbtexmf/core/commander.py
+@@ -1,5 +1,6 @@
+ import os
+ from subprocess import Popen, PIPE
++from io import open
+ 
+ class Command:
+     """Contains the needed data to run a command"""
+@@ -59,7 +60,7 @@ class CommandRunner:
+             if cmd.stdout == "PIPE":
+                 stdout = PIPE
+             elif cmd.stdout:
+-                stdout = open(cmd.stdout % kw, "w")
++                stdout = open(cmd.stdout % kw, "wb")
+ 
+             if kw: args = [a % kw for a in cmd.arguments]
+             else: args = cmd.arguments
+diff --git a/lib/dbtexmf/core/confparser.py b/lib/dbtexmf/core/confparser.py
+index bf0b931..fc01786 100644
+--- a/lib/dbtexmf/core/confparser.py
++++ b/lib/dbtexmf/core/confparser.py
+@@ -1,11 +1,13 @@
++from __future__ import print_function
++
+ import os
+ import sys
+ from xml.etree.ElementTree import ParseError
+-from xmlparser import XmlConfig
+-from txtparser import TextConfig
+-from imagedata import ImageConverterPool, ImageConverter
+-from imagedata import ImageFormatPool, FormatRule
+-from imagedata import image_setup
++from dbtexmf.core.xmlparser import XmlConfig
++from dbtexmf.core.txtparser import TextConfig
++from dbtexmf.core.imagedata import ImageConverterPool, ImageConverter
++from dbtexmf.core.imagedata import ImageFormatPool, FormatRule
++from dbtexmf.core.imagedata import image_setup
+ from dbtexmf.xslt.xsltconf import XsltCommandPool, XsltEngine
+ from dbtexmf.xslt import xslt_setup
+ 
+@@ -76,16 +78,16 @@ class DbtexConfig:
+         self.style_exts = ["", ".xml", ".specs", ".conf"]
+ 
+     def warn(self, text):
+-        print >>sys.stderr, text
++        print(text, file=sys.stderr)
+ 
+     def fromfile(self, filename):
+         try:
+             self.fromxmlfile(filename)
+-        except ParseError, e:
++        except ParseError as e:
+             self.warn("Text configuration files are deprecated. "\
+                       "Use the XML format instead")
+             self.fromtxtfile(filename)
+-        except Exception, e:
++        except Exception as e:
+             raise e
+ 
+     def fromxmlfile(self, filename):
+diff --git a/lib/dbtexmf/core/dbtex.py b/lib/dbtexmf/core/dbtex.py
+index 92b84f2..b12fafe 100644
+--- a/lib/dbtexmf/core/dbtex.py
++++ b/lib/dbtexmf/core/dbtex.py
+@@ -2,16 +2,18 @@
+ # DbTex base class handling the compilation of a DocBook file via
+ # XSL Transformation and some TeX engine compilation.
+ #
++from __future__ import print_function
++
+ import sys
+ import os
+ import re
+ import shlex
+ import tempfile
+ import shutil
+-import urllib
+ import glob
+ import imp
+ from optparse import OptionParser
++from io import open
+ 
+ from dbtexmf.core.txtparser import texinputs_parse, texstyle_parse
+ from dbtexmf.core.confparser import DbtexConfig
+@@ -19,6 +21,11 @@ from dbtexmf.xslt import xslt
+ import dbtexmf.core.logger as logger
+ from dbtexmf.core.error import signal_error, failed_exit, dump_stack
+ 
++try:
++    from urllib import pathname2url
++except ImportError:
++    from urllib.request import pathname2url
++
+ 
+ def suffix_replace(path, oldext, newext=""):
+     (root, ext) = os.path.splitext(path)
+@@ -29,9 +36,9 @@ def suffix_replace(path, oldext, newext=""):
+ 
+ def path_to_uri(path):
+     if os.name == 'nt':
+-        return 'file:' + urllib.pathname2url(path).replace('|', ':', 1)
++        return 'file:' + pathname2url(path).replace('|', ':', 1)
+     else:
+-        return urllib.pathname2url(path)
++        return pathname2url(path)
+ 
+ 
+ class Document:
+@@ -48,24 +55,36 @@ class Document:
+     def has_subext(self, ext):
+         return (os.path.splitext(self.basename)[1] == ext)
+ 
+-    def __cmp__(self, other):
+-        """
+-        Comparaison method mainly to check if the document is in a list
+-        """
+-        if cmp(self.rawfile, other) == 0:
+-            return 0
+-        if cmp(self.texfile, other) == 0:
+-            return 0
+-        if cmp(self.binfile, other) == 0:
+-            return 0
+-        return -1
++    def __eq__(self, other):
++        if self.rawfile == other:
++            return True
++        if self.texfile == other:
++            return True
++        if self.binfile == other:
++            return True
++        return False
++
++    def __ne__(self, other):
++        return not self.__eq__(other)
++
++    def __lt__(self, other):
++        return self.__ne__(other)
++
++    def __le__(self, other):
++        return False
++
++    def __gt__(self, other):
++        return False
++
++    def __ge__(self, other):
++        return False
+ 
+ 
+ class DbTex:
+     USE_MKLISTINGS = 1
+ 
+     xsl_header = \
+-"""<?xml version="1.0"?>
++u"""<?xml version="1.0"?>
+ <xsl:stylesheet xmlns:xsl="http://www.w3.org/1999/XSL/Transform"
+                 xmlns:m="http://www.w3.org/1998/Math/MathML"
+                 version="1.0">
+@@ -183,7 +202,7 @@ class DbTex:
+         self.flags &= ~what
+ 
+     def get_version(self):
+-        f = file(os.path.join(self.topdir, "xsl", "version.xsl"))
++        f = open(os.path.join(self.topdir, "xsl", "version.xsl"), "rt", encoding="latin-1")
+         versions = re.findall("<xsl:variable[^>]*>([^<]*)<", f.read())
+         f.close()
+         if versions:
+@@ -196,11 +215,11 @@ class DbTex:
+             self.xslbuild = self.xslmain
+             return
+ 
+-        f = file(wrapper, "w")
++        f = open(wrapper, "wt", encoding="latin-1")
+         f.write(self.xsl_header)
+-        f.write('<xsl:import href="%s"/>\n' % path_to_uri(self.xslmain))
++        f.write(u'<xsl:import href="%s"/>\n' % path_to_uri(self.xslmain))
+         for xsluser in self.xslusers:
+-            f.write('<xsl:import href="%s"/>\n' % path_to_uri(xsluser))
++            f.write(u'<xsl:import href="%s"/>\n' % path_to_uri(xsluser))
+ 
+         # Reverse to set the latest parameter first (case of overriding)
+         self.xslparams.reverse()
+@@ -231,8 +250,8 @@ class DbTex:
+                               self.listings, opts=self.xslopts, params=param)
+         else:
+             self.log.info("No external file support")
+-            f = file(self.listings, "w")
+-            f.write("<listings/>\n")
++            f = open(self.listings, "wt", encoding="latin-1")
++            f.write(u"<listings/>\n")
+             f.close()
+ 
+     def _single_setup(self):
+@@ -254,7 +273,7 @@ class DbTex:
+                           "Use the working directory")
+             self.outputdir = self.cwdir
+ 
+-        f = open(doclist)
++        f = open(doclist, "rt", encoding="latin-1")
+         books = f.readlines()
+         f.close()
+ 
+@@ -268,11 +287,11 @@ class DbTex:
+         # set list
+         self.log.info("Build the book set list...")
+         xslset = "doclist.xsl"
+-        f = file(xslset, "w")
++        f = open(xslset, "wt", encoding="latin-1")
+         f.write(self.xsl_header)
+-        f.write('<xsl:import href="%s"/>\n' % path_to_uri(self.xslbuild))
+-        f.write('<xsl:import href="%s"/>\n' % path_to_uri(self.xslset))
+-        f.write('</xsl:stylesheet>\n')
++        f.write(u'<xsl:import href="%s"/>\n' % path_to_uri(self.xslbuild))
++        f.write(u'<xsl:import href="%s"/>\n' % path_to_uri(self.xslset))
++        f.write(u'</xsl:stylesheet>\n')
+         f.close()
+ 
+         doclist = os.path.join(self.tmpdir, "doclist.txt")
+@@ -369,7 +388,7 @@ class DbTex:
+ 
+         # Need to dump the stdin input, because of the two passes
+         self.input = os.path.join(self.tmpdir, "stdin.xml")
+-        f = open(self.input, "w")
++        f = open(self.input, "wt", encoding="latin-1")
+         for line in sys.stdin:
+             f.write(line)
+         f.close()
+@@ -395,15 +414,15 @@ class DbTex:
+         self.update_texinputs()
+ 
+         # For easy debug
+-        if self.debug and os.environ.has_key("TEXINPUTS"):
++        if self.debug and "TEXINPUTS" in os.environ:
+             if os.name != "nt":
+-                f = file("env_tex", "w")
+-                f.write("TEXINPUTS=%s\nexport TEXINPUTS\n" % \
++                f = open("env_tex", "wt")
++                f.write(u"TEXINPUTS=%s\nexport TEXINPUTS\n" % \
+                         os.environ["TEXINPUTS"])
+                 f.close()
+             else:
+-                f = file("env_tex.bat", "w")
+-                f.write("set TEXINPUTS=%s\n" % os.environ["TEXINPUTS"])
++                f = open("env_tex.bat", "wt")
++                f.write(u"set TEXINPUTS=%s\n" % os.environ["TEXINPUTS"])
+                 f.close()
+ 
+         # Build the tex file(s), and compile it(them)
+@@ -544,13 +563,13 @@ class DbTexCommand:
+         if options.format:
+             try:
+                 run.set_format(options.format)
+-            except Exception, e:
++            except Exception as e:
+                 failed_exit("Error: %s" % e)
+ 
+         # Always set the XSLT (default or not)
+         try:
+             run.set_xslt(options.xslt)
+-        except Exception, e:
++        except Exception as e:
+             failed_exit("Error: %s" % e)
+ 
+         if options.xslopts:
+@@ -575,7 +594,7 @@ class DbTexCommand:
+         if options.texstyle:
+             try:
+                 xslparam, texpath = texstyle_parse(options.texstyle)
+-            except Exception, e:
++            except Exception as e:
+                 failed_exit("Error: %s" % e)
+             run.xslparams.append(xslparam)
+             if texpath: run.texinputs.append(texpath)
+@@ -630,7 +649,7 @@ class DbTexCommand:
+             if not(os.path.exists(options.tmpdir)):
+                 try:
+                     os.mkdir(options.tmpdir)
+-                except Exception, e:
++                except Exception as e:
+                     failed_exit("Error: %s" % e)
+             run.tmpdir_user = os.path.abspath(options.tmpdir)
+ 
+@@ -665,7 +684,7 @@ class DbTexCommand:
+ 
+         if options.version:
+             version = run.get_version()
+-            print "%s version %s" % (self.prog, version)
++            print("%s version %s" % (self.prog, version))
+             if not(args):
+                 sys.exit(0)
+ 
+@@ -682,14 +701,14 @@ class DbTexCommand:
+             try:
+                 conf.paths = self.get_config_paths()
+                 conf.fromstyle(options.style)
+-            except Exception, e:
++            except Exception as e:
+                 failed_exit("Error: %s" % e)
+             
+         if options.config:
+             try:
+                 for config in options.config:
+                     conf.fromfile(config)
+-            except Exception, e:
++            except Exception as e:
+                 failed_exit("Error: %s" % e)
+ 
+         if conf.options:
+@@ -735,7 +754,7 @@ class DbTexCommand:
+         # Try to buid the file
+         try:
+             run.compile()
+-        except Exception, e:
++        except Exception as e:
+             signal_error(self, e)
+             failed_exit("Error: %s" % e)
+ 
+diff --git a/lib/dbtexmf/core/error.py b/lib/dbtexmf/core/error.py
+index 4bf44ee..2d71599 100644
+--- a/lib/dbtexmf/core/error.py
++++ b/lib/dbtexmf/core/error.py
+@@ -4,6 +4,8 @@
+ #   error handler.
+ # - A general API.
+ #
++from __future__ import print_function
++
+ import sys
+ import traceback
+ 
+@@ -49,7 +51,7 @@ def signal_error(*args, **kwargs):
+ 
+ def failure_track(msg):
+     global _dump_stack
+-    print >>sys.stderr, (msg)
++    print((msg), file=sys.stderr)
+     if _dump_stack:
+         traceback.print_exc()
+ 
+diff --git a/lib/dbtexmf/core/imagedata.py b/lib/dbtexmf/core/imagedata.py
+index ebbd5c7..d01d93a 100644
+--- a/lib/dbtexmf/core/imagedata.py
++++ b/lib/dbtexmf/core/imagedata.py
+@@ -3,9 +3,13 @@ import os
+ import re
+ import shutil
+ import logging
+-import urllib
+ from dbtexmf.core.error import signal_error
+-from commander import CommandRunner
++from dbtexmf.core.commander import CommandRunner
++
++try:
++    from urllib import url2pathname
++except ImportError:
++    from urllib.request import url2pathname
+ 
+ class ObjectFilter:
+     """
+@@ -258,8 +262,10 @@ class Imagedata:
+                                                       backend=backend)
+ 
+     def convert(self, fig):
++        fig = fig.decode("utf-8")
++
+         # Translate the URL to an actual local path
+-        fig = urllib.url2pathname(fig)
++        fig = url2pathname(fig)
+ 
+         # Always use '/' in path: work even on windows and is required by tex
+         if os.path.sep != '/': fig = fig.replace(os.path.sep, '/')
+@@ -273,7 +279,7 @@ class Imagedata:
+             return fig
+ 
+         # Check if this image has been already converted
+-        if self.converted.has_key(realfig):
++        if realfig in self.converted:
+             self.log.info("Image '%s' already converted as %s" % \
+                   (fig, self.converted[realfig]))
+             return self.converted[realfig]
+@@ -306,7 +312,7 @@ class Imagedata:
+         conv.log = self.log
+         conv.convert(realfig, newfig, self.output_format)
+         self.converted[realfig] = newfig
+-        return newfig
++        return self._path_encode(newfig)
+ 
+     def _safe_file(self, fig, realfig, ext):
+         """
+@@ -316,7 +322,7 @@ class Imagedata:
+         # Encode to expected output format. If encoding is OK and 
+         # supported by tex, just return the encoded path
+         newfig = self._path_encode(fig)
+-        if newfig and newfig.find(" ") == -1:
++        if newfig and newfig.find(b" ") == -1:
+             return newfig
+ 
+         # Added to the converted list
+@@ -326,17 +332,17 @@ class Imagedata:
+ 
+         # Do the copy
+         shutil.copyfile(realfig, newfig)
+-        return newfig
++        return self._path_encode(newfig)
+ 
+     def _path_encode(self, fig):
+         # Actually, only ASCII characters are sure to match filesystem encoding
+         # so let's be conservative
+-        if self.output_encoding == "utf8":
+-            return fig
++        if self.output_encoding == "utf-8":
++            return fig.encode("utf-8")
+         try:
+-            newfig = fig.decode("utf8").encode("ascii")
++            newfig = fig.encode("ascii")
+         except:
+-            newfig = ""
++            newfig = b""
+         return newfig
+ 
+     def scanformat(self, fig):
+diff --git a/lib/dbtexmf/core/sgmlxml.py b/lib/dbtexmf/core/sgmlxml.py
+index 30e6b84..80b28b3 100644
+--- a/lib/dbtexmf/core/sgmlxml.py
++++ b/lib/dbtexmf/core/sgmlxml.py
+@@ -7,6 +7,7 @@ import sys
+ import re
+ import logging
+ from subprocess import call
++from io import open
+ 
+ class Osx:
+     def __init__(self):
+@@ -20,7 +21,7 @@ class Osx:
+     def replace_entities(self, entfile, mapfile, outfile=None):
+         # Find out the SDATA entities to replace
+         re_ent = re.compile('<!ENTITY +([^\s]+) +"?\[([^\s"]+) *\]"?>')
+-        f = open(entfile)
++        f = open(entfile, "rt", encoding="latin-1")
+         lines = f.readlines()
+         f.close()
+ 
+@@ -37,7 +38,7 @@ class Osx:
+         entpat = "^(%s)\s+[^\s]+\s+0(x[^\s]+)" % "|".join([x for x, y in ents])
+         re_map = re.compile(entpat)
+         entmap = []
+-        f = open(mapfile)
++        f = open(mapfile, "rt", encoding="latin-1")
+         for line in f:
+             entmap += re_map.findall(line.split("#")[0])
+         f.close()
+@@ -63,18 +64,18 @@ class Osx:
+                 del entdict[ent]
+ 
+         if not(outfile): outfile = entfile
+-        f = open(outfile, "w")
++        f = open(outfile, "wt", encoding="latin-1")
+         f.writelines(nlines)
+         f.close()
+ 
+     def run(self, sgmlfile, xmlfile):
+         errfile = "errors.osx"
+-        f = open(xmlfile, "w")
++        f = open(xmlfile, "wb")
+         rc = call(["osx"] + self.opts + ["-f", errfile, sgmlfile], stdout=f)
+         f.close()
+         if rc != 0:
+             i = 0
+-            f = open(errfile)
++            f = open(errfile, "rt")
+             for line in f:
+                 sys.stderr.write(line)
+                 i += 1
+diff --git a/lib/dbtexmf/core/txtparser.py b/lib/dbtexmf/core/txtparser.py
+index 709d877..cc0c4bd 100644
+--- a/lib/dbtexmf/core/txtparser.py
++++ b/lib/dbtexmf/core/txtparser.py
+@@ -3,6 +3,7 @@
+ #
+ import os
+ import re
++from io import open
+ 
+ #
+ # Functions used by the config parsers and by the dbtex command parser
+@@ -86,7 +87,7 @@ class TextConfig:
+ 
+     def fromfile(self, file):
+         dir = os.path.dirname(os.path.realpath(file))
+-        f = open(file)
++        f = open(file, "rt")
+ 
+         for line in f:
+             # Remove the comment
+@@ -96,7 +97,7 @@ class TextConfig:
+                 continue
+             key = m.group(1)
+             value = m.group(2).strip()
+-            if not self.conf_mapping.has_key(key):
++            if key not in self.conf_mapping:
+                 continue
+             o = self.conf_mapping[key]
+ 
+diff --git a/lib/dbtexmf/core/xmlparser.py b/lib/dbtexmf/core/xmlparser.py
+index 501b7f7..25b1230 100644
+--- a/lib/dbtexmf/core/xmlparser.py
++++ b/lib/dbtexmf/core/xmlparser.py
+@@ -1,7 +1,7 @@
+ import os
+ import re
+ import xml.etree.ElementTree as ET
+-from txtparser import texinputs_parse
++from dbtexmf.core.txtparser import texinputs_parse
+ 
+ class BaseOption:
+     def __init__(self, config, optname):
+diff --git a/lib/dbtexmf/dblatex/dblatex.py b/lib/dbtexmf/dblatex/dblatex.py
+index 0e9ae71..e22b965 100644
+--- a/lib/dbtexmf/dblatex/dblatex.py
++++ b/lib/dbtexmf/dblatex/dblatex.py
+@@ -7,8 +7,8 @@ import os
+ from dbtexmf.core.sgmlxml import Osx
+ from dbtexmf.core.dbtex import DbTex, DbTexCommand
+ 
+-from rawtex import RawLatex
+-from runtex import RunLatex
++from dbtexmf.dblatex.rawtex import RawLatex
++from dbtexmf.dblatex.runtex import RunLatex
+ 
+ 
+ class DbLatex(DbTex):
+diff --git a/lib/dbtexmf/dblatex/grubber/bibtex.py b/lib/dbtexmf/dblatex/grubber/bibtex.py
+index 7615cfc..296a992 100644
+--- a/lib/dbtexmf/dblatex/grubber/bibtex.py
++++ b/lib/dbtexmf/dblatex/grubber/bibtex.py
+@@ -18,11 +18,12 @@ import os, sys
+ from os.path import *
+ import re, string
+ import subprocess
++from io import open
+ 
+ #from grubber import _
+ #from grubber import *
+-from msg import _, msg
+-from plugins import TexModule
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.plugins import TexModule
+ 
+ re_bibdata = re.compile(r"\\bibdata{(?P<data>.*)}")
+ re_citation = re.compile(r"\\citation{(?P<cite>.*)}")
+@@ -111,7 +112,7 @@ class BibTex(TexModule):
+         """
+         if self.style:
+             old_bst = self.style + ".bst"
+-            if exists(old_bst) and self.doc.sources.has_key(old_bst):
++            if exists(old_bst) and old_bst in self.doc.sources:
+                 del self.doc.sources[old_bst]
+ 
+         self.style = style
+@@ -174,7 +175,7 @@ class BibTex(TexModule):
+                         pkg="bibtex")
+                 return 1
+ 
+-        blg = open(self.blgfile)
++        blg = open(self.blgfile, "rt", encoding="latin-1")
+         for line in blg.readlines():
+             if re_error.search(line):
+                 blg.close()
+@@ -202,12 +203,12 @@ class BibTex(TexModule):
+             auxfiles.append(self.auxfile)
+ 
+         for auxname in auxfiles:
+-            aux = open(auxname)
++            aux = open(auxname, "rt", encoding="latin-1")
+             for line in aux:
+                 m = re_citation.match(line)
+                 if m:
+                     cite = m.group("cite")
+-                    if not cites.has_key(cite):
++                    if cite not in cites:
+                         last = last + 1
+                         cites[cite] = last
+                     continue
+@@ -358,7 +359,7 @@ class BibTex(TexModule):
+         """
+         if not exists(self.blgfile):
+             return 0
+-        log = open(self.blgfile)
++        log = open(self.blgfile, "rt", encoding="latin-1")
+         line = log.readline()
+         while line != "":
+             if line.startswith("The style file: "):
+@@ -376,7 +377,7 @@ class BibTex(TexModule):
+         """
+         if not exists(self.blgfile):
+             return
+-        log = open(self.blgfile)
++        log = open(self.blgfile, "rt", encoding="latin-1")
+         last_line = ""
+         for line in log:
+             m = re_error.search(line)
+@@ -400,9 +401,9 @@ class BibTex(TexModule):
+                 file = d["file"]
+                 if file[-4:] == ".bib":
+                     file = file[:-4]
+-                if self.db.has_key(file):
++                if file in self.db:
+                     d["file"] = self.db[file]
+-                elif self.db.has_key(file + ".bib"):
++                elif file + ".bib" in self.db:
+                     d["file"] = self.db[file + ".bib"]
+                 yield d
+             last_line = line
+diff --git a/lib/dbtexmf/dblatex/grubber/bibtopic.py b/lib/dbtexmf/dblatex/grubber/bibtopic.py
+index 4c1ef9f..af36830 100644
+--- a/lib/dbtexmf/dblatex/grubber/bibtopic.py
++++ b/lib/dbtexmf/dblatex/grubber/bibtopic.py
+@@ -1,6 +1,6 @@
+ 
+-from plugins import TexModule
+-from bibtex import BibTex
++from dbtexmf.dblatex.grubber.plugins import TexModule
++from dbtexmf.dblatex.grubber.bibtex import BibTex
+ 
+ 
+ class BibSect(BibTex):
+diff --git a/lib/dbtexmf/dblatex/grubber/dvips.py b/lib/dbtexmf/dblatex/grubber/dvips.py
+index 83bafa7..43f9326 100644
+--- a/lib/dbtexmf/dblatex/grubber/dvips.py
++++ b/lib/dbtexmf/dblatex/grubber/dvips.py
+@@ -13,9 +13,9 @@ import os
+ from os.path import *
+ import subprocess
+ 
+-from msg import _ , msg
+-from plugins import TexModule
+-from maker import Depend
++from dbtexmf.dblatex.grubber.msg import _ , msg
++from dbtexmf.dblatex.grubber.plugins import TexModule
++from dbtexmf.dblatex.grubber.maker import Depend
+ 
+ class Dep (Depend):
+     def __init__ (self, doc, target, source, node):
+diff --git a/lib/dbtexmf/dblatex/grubber/index.py b/lib/dbtexmf/dblatex/grubber/index.py
+index 2194b02..564ff8f 100644
+--- a/lib/dbtexmf/dblatex/grubber/index.py
++++ b/lib/dbtexmf/dblatex/grubber/index.py
+@@ -38,6 +38,7 @@ this argument, they apply to all indices declared at the point where they
+ occur.
+ """
+ 
++import sys
+ import os
+ from os.path import *
+ import re, string
+@@ -45,9 +46,11 @@ import subprocess
+ import xml.dom.minidom
+ 
+ from subprocess import Popen, PIPE
+-from msg import _, msg
+-from plugins import TexModule
+-from util import md5_file
++from io import open
++
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.plugins import TexModule
++from dbtexmf.dblatex.grubber.util import md5_file
+ 
+ 
+ class Xindy:
+@@ -133,7 +136,7 @@ class Xindy:
+         # Texindy produces latin-* indexes. Try to find out which one from
+         # the modules loaded by the script (language dependent)
+         re_lang = re.compile("loading module \"lang/.*/(latin[^.-]*)")
+-        logfile = open(logname)
++        logfile = open(logname, "rt", encoding="latin-1")
+         encoding = ""
+         for line in logfile:
+             m = re_lang.search(line)
+@@ -145,7 +148,7 @@ class Xindy:
+         return encoding
+ 
+     def _index_is_unicode(self):
+-        f = file(self.target, "r")
++        f = open(self.target, "rb")
+         is_unicode = True 
+         for line in f:
+             try:
+@@ -162,20 +165,20 @@ class Xindy:
+         # with Xindy. If not, the following error is raised by Xindy:
+         # "WARNING: unknown cross-reference-class `hyperindexformat'! (ignored)"
+         #
+-        f = file(self.idxfile, "r")
++        f = open(self.idxfile, "rt", encoding="latin-1")
+         data = f.read()
+         f.close()
+         data, nsub = self._re_hyperindex.subn(r"\1}{", data)
+         if not(nsub):
+             return
+         msg.debug("Remove %d unsupported 'hyperindexformat' calls" % nsub)
+-        f = file(self.idxfile, "w")
++        f = open(self.idxfile, "wt", encoding="latin-1")
+         f.write(data)
+         f.close()
+ 
+     def _fix_invalid_ranges(self):
+         if not(self.invalid_index_ranges): return
+-        f = open(self.idxfile)
++        f = open(self.idxfile, "rt", encoding="latin-1")
+         lines = f.readlines()
+         f.close()
+ 
+@@ -199,7 +202,7 @@ class Xindy:
+         skip_lines.reverse()
+         for line_num in skip_lines:
+             del lines[line_num]
+-        f = open(self.idxfile, "w")
++        f = open(self.idxfile, "wt", encoding="latin-1")
+         f.writelines(lines)
+         f.close()
+ 
+@@ -232,9 +235,11 @@ class Xindy:
+ 
+         # Collect the script output, and errors
+         logname = join(dirname(self.target), "xindy.log")
+-        logfile = open(logname, "w")
++        logfile = open(logname, "wb")
+         p = Popen(cmd, stdout=logfile, stderr=PIPE)
+         errdata = p.communicate()[1]
++        if isinstance(errdata, bytes):
++            errdata = errdata.decode(sys.getdefaultencoding())
+         rc = p.wait()
+         if msg.stdout:
+             msg.stdout.write(errdata)
+@@ -264,7 +269,7 @@ class Indexentry:
+     """
+     Index entry wrapper from idxfile. Its role is to detect range anomalies
+     """
+-    _re_entry = re.compile("\indexentry{(.*)\|([\(\)]?).*}{(\d+)}", re.DOTALL)
++    _re_entry = re.compile(r"\\indexentry{(.*)\|([\(\)]?).*}{(\d+)}", re.DOTALL)
+ 
+     def __init__(self, index_key):
+         self.index_key = index_key
+@@ -330,7 +335,7 @@ class Makeindex:
+         return cmd
+ 
+     def _index_is_unicode(self):
+-        f = file(self.target, "r")
++        f = open(self.target, "rb")
+         is_unicode = True 
+         for line in f:
+             try:
+@@ -514,7 +519,7 @@ class Module (TexModule):
+         index = self.indices[name] = Index(self.doc, idx, ind, ilg)
+         for cmd in self.defaults:
+             index.command(*cmd)
+-        if self.commands.has_key(name):
++        if name in self.commands:
+             for cmd in self.commands[name]:
+                 index.command(*cmd)
+ 
+@@ -548,9 +553,9 @@ class Module (TexModule):
+             self.defaults.append([cmd, args])
+             names = indices.keys()
+         for index in names:
+-            if indices.has_key(index):
++            if index in indices:
+                 indices[index].command(cmd, args[1:])
+-            elif self.commands.has_key(index):
++            elif index in self.commands:
+                 self.commands[index].append([cmd, args])
+             else:
+                 self.commands[index] = [[cmd, args]]
+diff --git a/lib/dbtexmf/dblatex/grubber/latex.py b/lib/dbtexmf/dblatex/grubber/latex.py
+index 1708cd9..8524fd8 100644
+--- a/lib/dbtexmf/dblatex/grubber/latex.py
++++ b/lib/dbtexmf/dblatex/grubber/latex.py
+@@ -10,13 +10,14 @@ import os
+ import sys
+ import time
+ import subprocess
++from io import open
+ 
+-from msg import _, msg
+-from util import Watcher
+-from logparser import LogParser
+-from texparser import TexParser
+-from plugins import Modules
+-from maker import Depend
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.util import Watcher
++from dbtexmf.dblatex.grubber.logparser import LogParser
++from dbtexmf.dblatex.grubber.texparser import TexParser
++from dbtexmf.dblatex.grubber.plugins import Modules
++from dbtexmf.dblatex.grubber.maker import Depend
+ 
+ 
+ class Latex(Depend):
+@@ -122,7 +123,7 @@ class Latex(Depend):
+         Prepare the compilation by parsing the source file. The parsing
+         loads all the necessary modules required by the packages used, etc.
+         """
+-        f = open(self.srcfile)
++        f = open(self.srcfile, "rt", encoding="latin-1")
+         self.parser.parse(f, exclude_mods=exclude_mods)
+         f.close()
+ 
+diff --git a/lib/dbtexmf/dblatex/grubber/logparser.py b/lib/dbtexmf/dblatex/grubber/logparser.py
+index d7a00b9..e490d9f 100644
+--- a/lib/dbtexmf/dblatex/grubber/logparser.py
++++ b/lib/dbtexmf/dblatex/grubber/logparser.py
+@@ -8,8 +8,9 @@ This module defines the class that parses the LaTeX log files.
+ from __future__ import generators
+ 
+ import re
++from io import open
+ 
+-from msg import _, msg
++from dbtexmf.dblatex.grubber.msg import _, msg
+ 
+ class LogParser:
+     """
+@@ -51,7 +52,7 @@ class LogParser:
+         """
+         self.lines = []
+         try:
+-            file = open(name)
++            file = open(name, "rt")
+         except IOError:
+             return 2
+         line = file.readline()
+@@ -188,7 +189,7 @@ class LogParser:
+                         m = self.re_ignored.search(error)
+                         if m:
+                             d["file"] = last_file
+-                            if d.has_key("code"):
++                            if "code" in d:
+                                 del d["code"]
+                             d.update( m.groupdict() )
+                         elif pos[-1] is None:
+diff --git a/lib/dbtexmf/dblatex/grubber/makeidx.py b/lib/dbtexmf/dblatex/grubber/makeidx.py
+index d4c5f18..1157832 100644
+--- a/lib/dbtexmf/dblatex/grubber/makeidx.py
++++ b/lib/dbtexmf/dblatex/grubber/makeidx.py
+@@ -24,7 +24,7 @@ The following directives are provided to specify options for makeindex:
+ """
+ import sys
+ 
+-from index import Index
++from dbtexmf.dblatex.grubber.index import Index
+ 
+ class Module (Index):
+     def __init__ (self, doc, dict):
+diff --git a/lib/dbtexmf/dblatex/grubber/maker.py b/lib/dbtexmf/dblatex/grubber/maker.py
+index 14408f8..75d1dc3 100644
+--- a/lib/dbtexmf/dblatex/grubber/maker.py
++++ b/lib/dbtexmf/dblatex/grubber/maker.py
+@@ -4,11 +4,12 @@
+ This module contains all the classes used to manage the building
+ dependencies.
+ """
++from __future__ import print_function
+ import os
+ import time
+ import subprocess
+ 
+-from msg import _, msg
++from dbtexmf.dblatex.grubber.msg import _, msg
+ 
+ class Depend (object): #{{{2
+     """
+@@ -81,7 +82,7 @@ class Depend (object): #{{{2
+           on this one have to be remade)
+         """
+         if self.making:
+-            print "FIXME: cyclic make"
++            print("FIXME: cyclic make")
+             return 1
+         self.making = 1
+ 
+diff --git a/lib/dbtexmf/dblatex/grubber/msg.py b/lib/dbtexmf/dblatex/grubber/msg.py
+index 4ebb38f..8c2fffc 100644
+--- a/lib/dbtexmf/dblatex/grubber/msg.py
++++ b/lib/dbtexmf/dblatex/grubber/msg.py
+@@ -4,9 +4,12 @@
+ This module defines the messages diplay class, and creates the application-wide
+ msg object.
+ """
++from __future__ import print_function
++
+ import os, os.path
+ import sys
+ import logging
++from io import open
+ 
+ def _(txt): return txt
+ 
+@@ -32,14 +35,14 @@ class Message (object):
+         self._log = logging.getLogger("dblatex")
+         level = self._log.getEffectiveLevel()
+         if level >= logging.WARNING:
+-            self.stdout = open(os.devnull, "w")
++            self.stdout = open(os.devnull, "wb")
+         else:
+             self.stdout = None
+ 
+     def write_stdout(self, text, level=0):
+-        print text
++        print(text)
+     def write_stderr(self, text, level=0):
+-        print >>sys.stderr, text
++        print(text, file=sys.stderr)
+ 
+     def push_pos (self, pos):
+         self.pos.append(pos)
+@@ -66,7 +69,7 @@ class Message (object):
+             if text[0:13] == "LaTeX Error: ":
+                 text = text[13:]
+             self._log.error(self.format_pos(info, text))
+-            if info.has_key("code") and info["code"] and not self.short:
++            if "code" in info and info["code"] and not self.short:
+                 self._log.error(self.format_pos(info,
+                     _("leading text: ") + info["code"]))
+ 
+@@ -100,24 +103,24 @@ class Message (object):
+         the dictionary given as first argument.
+         """
+         if len(self.pos) > 0:
+-            if where is None or not where.has_key("file"):
++            if where is None or "file" not in where:
+                 where = self.pos[-1]
+         elif where is None or where == {}:
+             return text
+ 
+-        if where.has_key("file") and where["file"] is not None:
++        if "file" in where and where["file"] is not None:
+             pos = self.simplify(where["file"])
+-            if where.has_key("line") and where["line"]:
++            if "line" in where and where["line"]:
+                 pos = "%s:%d" % (pos, int(where["line"]))
+-                if where.has_key("last"):
++                if "last" in where:
+                     if where["last"] != where["line"]:
+                         pos = "%s-%d" % (pos, int(where["last"]))
+             pos = pos + ": "
+         else:
+             pos = ""
+-        if where.has_key("page"):
++        if "page" in where:
+             text = "%s (page %d)" % (text, int(where["page"]))
+-        if where.has_key("pkg"):
++        if "pkg" in where:
+             text = "[%s] %s" % (where["pkg"], text)
+         return pos + text
+ 
+diff --git a/lib/dbtexmf/dblatex/grubber/pdftex.py b/lib/dbtexmf/dblatex/grubber/pdftex.py
+index b10b2e2..f5f6635 100644
+--- a/lib/dbtexmf/dblatex/grubber/pdftex.py
++++ b/lib/dbtexmf/dblatex/grubber/pdftex.py
+@@ -9,13 +9,14 @@ using pdfTeX.
+ The module optimizes the pdflatex calls by setting -draftmode and apply a last
+ call to build the final PDF output.
+ """
++import sys
+ import os
+ import re
+ import subprocess
+ from subprocess import Popen, PIPE
+ 
+-from msg import _, msg
+-from plugins import TexModule
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.plugins import TexModule
+ 
+ 
+ class Module (TexModule):
+@@ -73,6 +74,8 @@ class Module (TexModule):
+         # Grab the major version number
+         p = Popen("pdflatex -version", shell=True, stdout=PIPE)
+         data = p.communicate()[0]
++        if isinstance(data, bytes):
++            data = data.decode(sys.getdefaultencoding())
+         m = re.search("pdfTeX.*3.14[^-]*-(\d*.\d*)", data, re.M)
+         if not(m):
+             return ""
+diff --git a/lib/dbtexmf/dblatex/grubber/plugins.py b/lib/dbtexmf/dblatex/grubber/plugins.py
+index f72bd13..01264fc 100644
+--- a/lib/dbtexmf/dblatex/grubber/plugins.py
++++ b/lib/dbtexmf/dblatex/grubber/plugins.py
+@@ -7,7 +7,7 @@ All the modules must be derived from the TexModule class.
+ import imp
+ 
+ from os.path import *
+-from msg import _, msg
++from dbtexmf.dblatex.grubber.msg import _, msg
+ 
+ import sys
+ 
+@@ -106,7 +106,7 @@ class Plugins (object):
+         dictionary. Return 0 if no module was found, 1 if a module was found
+         and loaded, and 2 if the module was found but already loaded.
+         """
+-        if self.modules.has_key(name):
++        if name in self.modules:
+             return 2
+         try:
+             file, path, descr = imp.find_module(name, [""])
+@@ -151,11 +151,11 @@ class Modules (Plugins):
+         """
+         return self.objects[name]
+ 
+-    def has_key (self, name):
++    def __contains__ (self, name):
+         """
+         Check if a given module is loaded.
+         """
+-        return self.objects.has_key(name)
++        return name in self.objects
+ 
+     def register (self, name, dict={}):
+         """
+@@ -165,7 +165,7 @@ class Modules (Plugins):
+         delayed commands for this module. The dictionary describes the
+         command that caused the registration.
+         """
+-        if self.has_key(name):
++        if name in self:
+             msg.debug(_("module %s already registered") % name)
+             return 2
+ 
+@@ -191,7 +191,7 @@ class Modules (Plugins):
+ 
+         # Run any delayed commands.
+ 
+-        if self.commands.has_key(name):
++        if name in self.commands:
+             for (cmd, args, vars) in self.commands[name]:
+                 msg.push_pos(vars)
+                 try:
+@@ -219,10 +219,10 @@ class Modules (Plugins):
+         Send a command to a particular module. If this module is not loaded,
+         store the command so that it will be sent when the module is register.
+         """
+-        if self.objects.has_key(mod):
++        if mod in self.objects:
+             self.objects[mod].command(cmd, args)
+         else:
+-            if not self.commands.has_key(mod):
++            if mod not in self.commands:
+                 self.commands[mod] = []
+             self.commands[mod].append((cmd, args, self.env.vars.copy()))
+ 
+diff --git a/lib/dbtexmf/dblatex/grubber/ps2pdf.py b/lib/dbtexmf/dblatex/grubber/ps2pdf.py
+index d7e1f33..02dfa60 100644
+--- a/lib/dbtexmf/dblatex/grubber/ps2pdf.py
++++ b/lib/dbtexmf/dblatex/grubber/ps2pdf.py
+@@ -7,9 +7,9 @@ PostScript to PDF conversion using GhostScript.
+ import sys
+ import os
+ 
+-from msg import _, msg
+-from maker import DependShell
+-from plugins import TexModule
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.maker import DependShell
++from dbtexmf.dblatex.grubber.plugins import TexModule
+ 
+ 
+ class Module (TexModule):
+diff --git a/lib/dbtexmf/dblatex/grubber/texbuilder.py b/lib/dbtexmf/dblatex/grubber/texbuilder.py
+index bcb02ba..adce529 100644
+--- a/lib/dbtexmf/dblatex/grubber/texbuilder.py
++++ b/lib/dbtexmf/dblatex/grubber/texbuilder.py
+@@ -9,9 +9,9 @@ of the rubber internals.
+ import subprocess
+ import os
+ import shlex
+-from msg import _, msg
+-from maker import Maker
+-from latex import Latex
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.maker import Maker
++from dbtexmf.dblatex.grubber.latex import Latex
+ 
+ 
+ class IndexBuilder:
+@@ -90,7 +90,7 @@ class LatexBuilder:
+         self.tex.prepare()
+ 
+         # Set the index configuration
+-        if self.tex.modules.has_key("makeidx"):
++        if "makeidx" in self.tex.modules:
+             idx = self.tex.modules["makeidx"]
+             if self.index.style: idx.do_style(self.index.style)
+             if self.index.tool: idx.do_tool(self.index.tool)
+diff --git a/lib/dbtexmf/dblatex/grubber/util.py b/lib/dbtexmf/dblatex/grubber/util.py
+index fa3bda6..289acaf 100644
+--- a/lib/dbtexmf/dblatex/grubber/util.py
++++ b/lib/dbtexmf/dblatex/grubber/util.py
+@@ -11,7 +11,9 @@ except ImportError:
+     # Fallback for python 2.4:
+     import md5 as hashlib
+ import os
+-from msg import _, msg
++from io import open
++
++from dbtexmf.dblatex.grubber.msg import _, msg
+ 
+ 
+ def md5_file(fname):
+@@ -19,7 +21,7 @@ def md5_file(fname):
+     Compute the MD5 sum of a given file.
+     """
+     m = hashlib.md5()
+-    file = open(fname)
++    file = open(fname, "rb")
+     for line in file.readlines():
+         m.update(line)
+     file.close()
+diff --git a/lib/dbtexmf/dblatex/grubber/xetex.py b/lib/dbtexmf/dblatex/grubber/xetex.py
+index f39a941..63bfe9d 100644
+--- a/lib/dbtexmf/dblatex/grubber/xetex.py
++++ b/lib/dbtexmf/dblatex/grubber/xetex.py
+@@ -2,7 +2,7 @@
+ XeTeX support for Rubber.
+ """
+ 
+-from plugins import TexModule
++from dbtexmf.dblatex.grubber.plugins import TexModule
+ 
+ class Module (TexModule):
+     def __init__ (self, doc, dict):
+diff --git a/lib/dbtexmf/dblatex/grubber/xr-hyper.py b/lib/dbtexmf/dblatex/grubber/xr-hyper.py
+index d7bee5c..36f4761 100644
+--- a/lib/dbtexmf/dblatex/grubber/xr-hyper.py
++++ b/lib/dbtexmf/dblatex/grubber/xr-hyper.py
+@@ -9,9 +9,9 @@ file, so this support package registers these files as dependencies.
+ """
+ import os
+ 
+-from msg import _, msg
+-from plugins import TexModule
+-from latex import Latex
++from dbtexmf.dblatex.grubber.msg import _, msg
++from dbtexmf.dblatex.grubber.plugins import TexModule
++from dbtexmf.dblatex.grubber.latex import Latex
+ 
+ class Module(TexModule):
+     def __init__ (self, doc, dict):
+@@ -23,7 +23,7 @@ class Module(TexModule):
+         # remember the engine used to build the main latex document
+         self.texmodules = []
+         for m in ("pdftex", "xetex"):
+-            if doc.modules.has_key(m):
++            if m in doc.modules:
+                 self.texmodules.append(m)
+ 
+         # want to track each external document whose .aux is required
+diff --git a/lib/dbtexmf/dblatex/rawparse.py b/lib/dbtexmf/dblatex/rawparse.py
+index a06a61d..9af17fa 100644
+--- a/lib/dbtexmf/dblatex/rawparse.py
++++ b/lib/dbtexmf/dblatex/rawparse.py
+@@ -1,7 +1,7 @@
+ import re
+ 
+-from texcodec import LatexCodec, TexCodec
+-from texhyphen import BasicHyphenator, UrlHyphenator
++from dbtexmf.dblatex.texcodec import LatexCodec, TexCodec
++from dbtexmf.dblatex.texhyphen import BasicHyphenator, UrlHyphenator
+ 
+ 
+ def utf8(u):
+@@ -31,7 +31,7 @@ class RawLatexParser:
+         self.hypof = re.compile(utf8(u"\u0371h"))
+ 
+     def parse(self, line):
+-        lout = ""
++        lout = b""
+         while (line):
+             self.key_in.pos = line.find(self.key_in.key)
+             self.key_out.pos = line.find(self.key_out.key)
+@@ -48,14 +48,14 @@ class RawLatexParser:
+                 line = line[key.pos + key.len:]
+             else:
+                 text = line
+-                line = ""
++                line = b""
+ 
+             if (text):
+                 if self.depth > 0:
+                     lout += self.translate(text)
+                 else:
+-                    text, hon = self.hypon.subn("", text)
+-                    text, hof = self.hypof.subn("", text)
++                    text, hon = self.hypon.subn(b"", text)
++                    text, hof = self.hypof.subn(b"", text)
+                     self.hyphenate += (hon - hof)
+                     lout += text
+ 
+diff --git a/lib/dbtexmf/dblatex/rawtex.py b/lib/dbtexmf/dblatex/rawtex.py
+index cc70d25..be3daee 100644
+--- a/lib/dbtexmf/dblatex/rawtex.py
++++ b/lib/dbtexmf/dblatex/rawtex.py
+@@ -7,10 +7,11 @@
+ import sys
+ import os
+ import re
++from io import open
+ 
+-from rawparse import RawLatexParser, RawUtfParser
+-from rawverb import VerbParser
+-from xetex.codec import XetexCodec
++from dbtexmf.dblatex.rawparse import RawLatexParser, RawUtfParser
++from dbtexmf.dblatex.rawverb import VerbParser
++from dbtexmf.dblatex.xetex.codec import XetexCodec
+ from dbtexmf.core.imagedata import *
+ 
+ 
+@@ -18,9 +19,9 @@ class RawLatex:
+     "Main latex file parser"
+     def __init__(self):
+         self.figre = \
+-            re.compile(r"(\\includegraphics[\[]?|"\
+-                       r"\\begin{overpic}|"\
+-                       r"\\imgexits)[^{]*{([^}]*)}")
++            re.compile(br"(\\includegraphics[\[]?|"\
++                       br"\\begin{overpic}|"\
++                       br"\\imgexits)[^{]*{([^}]*)}")
+         self.image = Imagedata()
+         self.parsers = []
+         self.format = None
+@@ -35,7 +36,7 @@ class RawLatex:
+             output_encoding = "utf8"
+             codec = XetexCodec()
+         elif not(output_encoding):
+-            f = file(input)
++            f = open(input, "rt", encoding="latin-1")
+             params = {}
+             started = 0
+             for line in f:
+@@ -68,8 +69,8 @@ class RawLatex:
+ 
+     def parse(self, input, output):
+         self.set_parsers(input)
+-        f = file(input)
+-        o = file(output, "w")
++        f = open(input, "rb")
++        o = open(output, "wb")
+         for line in f:
+             if self.format:
+                 line = self.figconvert(line)
+@@ -95,7 +96,7 @@ class RawLatex:
+ 
+             # If something done, replace the figure in the tex file
+             if newfig != fig:
+-                line = re.sub(r"{%s}" % fig, r"{%s}" % newfig, line)
++                line = re.sub(br"{%s}" % fig, br"{%s}" % newfig, line)
+ 
+         return line
+             
+diff --git a/lib/dbtexmf/dblatex/rawverb.py b/lib/dbtexmf/dblatex/rawverb.py
+index 36b30cf..49c0d0a 100644
+--- a/lib/dbtexmf/dblatex/rawverb.py
++++ b/lib/dbtexmf/dblatex/rawverb.py
+@@ -10,10 +10,11 @@
+ #   if necessary.
+ #
+ import re
++from io import open
+ 
+-from texcodec import TexCodec
+-from texcodec import tex_handler_counter
+-from rawparse import RawUtfParser
++from dbtexmf.dblatex.texcodec import TexCodec
++from dbtexmf.dblatex.texcodec import tex_handler_counter
++from dbtexmf.dblatex.rawparse import RawUtfParser
+ 
+ 
+ class VerbCodec(TexCodec):
+@@ -49,13 +50,13 @@ class VerbParser:
+     def __init__(self, output_encoding="latin-1"):
+         # The listing environment can be different from 'lstlisting'
+         # but the rule is that it must begin with 'lst'
+-        self.start_re = re.compile(r"\\begin{lst[^}]*}")
+-        self.stop_re = re.compile(r"\\end{lst[^}]*}")
+-        self.esc_re = re.compile(r"escapeinside={([^}]*)}{([^}]*)}")
+-        self.block = ""
++        self.start_re = re.compile(br"\\begin{lst[^}]*}")
++        self.stop_re = re.compile(br"\\end{lst[^}]*}")
++        self.esc_re = re.compile(br"escapeinside={([^}]*)}{([^}]*)}")
++        self.block = b""
+         self.encoding = output_encoding
+-        self.default_esc_start = "<:"
+-        self.default_esc_stop = ":>"
++        self.default_esc_start = b"<:"
++        self.default_esc_stop = b":>"
+         self.default_codec = VerbCodec(self.default_esc_start,
+                                        self.default_esc_stop,
+                                        output_encoding=output_encoding)
+@@ -79,13 +80,13 @@ class VerbParser:
+         self.command = line[m.start():m.end()]
+         line = line[m.end():]
+         # By default, no escape sequence defined yet
+-        self.esc_start = ""
+-        self.esc_stop = ""
+-        self.options = ""
++        self.esc_start = b""
++        self.esc_stop = b""
++        self.options = b""
+ 
+         # If there are some options, look for escape specs
+-        if line[0] == "[":
+-            e = line.find("]")+1
++        if line[0] == b"[":
++            e = line.find(b"]")+1
+             self.options = line[:e]
+             line = line[e:]
+             m = self.esc_re.search(self.options)
+@@ -109,28 +110,28 @@ class VerbParser:
+ 
+         # Add the escape option if necessary
+         if not(self.esc_start) and c.get_errors() != 0:
+-            escopt = "escapeinside={%s}{%s}" % (c.pre, c.post)
++            escopt = b"escapeinside={%s}{%s}" % (c.pre, c.post)
+             if self.options:
+                 if self.options[-2] != ",":
+-                    escopt = "," + escopt
++                    escopt = b"," + escopt
+                 self.options = self.options[:-1] + escopt + "]"
+             else:
+-                self.options = "[" + escopt + "]"
++                self.options = b"[" + escopt + b"]"
+ 
+         block = self.command + self.options + text + line[m.start():]
+-        self.block = ""
++        self.block = b""
+         return block
+ 
+     def block_grow(self, line):
+         self.block += line
+-        return ""
++        return b""
+ 
+     def get_codec(self):
+         # Something already specified
+         if (self.esc_start):
+             if self.esc_start != self.default_esc_start:
+                 return VerbCodec(self.esc_start, self.esc_stop,
+-                                 "verbtex" + self.esc_start,
++                                 b"verbtex" + self.esc_start,
+                                  output_encoding=self.encoding)
+             else:
+                 return self.default_codec
+@@ -140,7 +141,7 @@ class VerbParser:
+         iter = 0
+         i = self.block.find(s)
+         while (i != -1):
+-            s = "<" + str(iter) + ":"
++            s = b"<" + bytes(iter) + b":"
+             i = self.block.find(s)
+             iter += 1
+ 
+@@ -148,16 +149,17 @@ class VerbParser:
+         if (s == self.default_esc_start):
+             return self.default_codec
+ 
+-        return VerbCodec(s, self.default_esc_stop, "verbtex" + s,
++        return VerbCodec(s, self.default_esc_stop, b"verbtex" + s,
+                          output_encoding=self.encoding)
+ 
+ 
+ if __name__ == "__main__":
+     import sys
+     v = VerbParser()
+-    f = open(sys.argv[1])
++    buf = getattr(sys.stdout, "buffer", sys.stdout)
++    f = open(sys.argv[1], "rb")
+     for line in f:
+         text = v.parse(line)
+         if text:
+-            sys.stdout.write(text)
++            buf.write(text)
+ 
+diff --git a/lib/dbtexmf/dblatex/runtex.py b/lib/dbtexmf/dblatex/runtex.py
+index c89e43d..91a88ae 100644
+--- a/lib/dbtexmf/dblatex/runtex.py
++++ b/lib/dbtexmf/dblatex/runtex.py
+@@ -4,8 +4,9 @@
+ import os
+ import re
+ import shutil
++from io import open
+ 
+-from grubber.texbuilder import LatexBuilder
++from dbtexmf.dblatex.grubber.texbuilder import LatexBuilder
+ 
+ 
+ class RunLatex:
+@@ -86,16 +87,16 @@ class RunLatex:
+         texout = root + "." + format
+ 
+         # The temporary file contains the extra paths
+-        f = file(tmptex, "w")
++        f = open(tmptex, "wt", encoding="latin-1")
+         if self.fig_paths:
+             paths = "{" + "//}{".join(self.fig_paths) + "//}"
+-            f.write("\\makeatletter\n")
+-            f.write("\\def\\input@path{%s}\n" % paths)
+-            f.write("\\makeatother\n")
++            f.write(u"\\makeatletter\n")
++            f.write(u"\\def\\input@path{%s}\n" % paths)
++            f.write(u"\\makeatother\n")
+ 
+         # Copy the original file and collect parameters embedded in the tex file
+         self._clear_params()
+-        input = file(texfile)
++        input = open(texfile, "rt", encoding="latin-1")
+         for line in input:
+             self._set_params(line)
+             f.write(line)
+diff --git a/lib/dbtexmf/dblatex/texcodec.py b/lib/dbtexmf/dblatex/texcodec.py
+index 3dfab6b..67e28b8 100644
+--- a/lib/dbtexmf/dblatex/texcodec.py
++++ b/lib/dbtexmf/dblatex/texcodec.py
+@@ -2,9 +2,11 @@
+ # The Latex Codec handles the encoding from UFT-8 text to latin1
+ # latex compatible text.
+ #
++from __future__ import print_function
++
+ import re
+ import codecs
+-import unient
++import dbtexmf.dblatex.unient as unient
+ 
+ # Dictionnary of the handlers installed
+ tex_handler_installed = {}
+@@ -21,7 +23,7 @@ def latex_char_replace(exc, pre, post, name):
+         try:
+             l.append(unient.unicode_map[ord(c)])
+         except KeyError:
+-            print "Missing character &#x%x;" % ord(c)
++            print("Missing character &#x%x;" % ord(c))
+             l.append(u"\&\#x%x;" % ord(c))
+         if post: l.append(post)
+         n = n + 1
+@@ -32,21 +34,21 @@ def latex_char_replace(exc, pre, post, name):
+ class TexCodec:
+     # This mapping for characters < 256 seems enough for latin1 output
+     charmap = {
+-              "\xa0": r"~",
+-              # "\xa2": r"\textcent{}",
+-              # "\xa4": r"\textcurrency{}",
+-              "\xa5": r"$\yen$",
+-              # "\xa6": r"\textbrokenbar{}",
+-              "\xac": r"\ensuremath{\lnot}",
+-              # "\xad": r"", # FIXME: bug around soft hyphen...
+-              "\xb0": r"\textdegree{}",
+-              "\xb1": r"\ensuremath{\pm}",
+-              "\xb2": r"$^2$",
+-              "\xb3": r"$^3$",
+-              "\xb5": r"$\mathrm{\mu}$",
+-              "\xb9": r"$^1$",
+-              "\xd7": r"$\times$",
+-              "\xf7": r"$\div$"
++              b"\xa0": br"~",
++              # b"\xa2": br"\textcent{}",
++              # b"\xa4": br"\textcurrency{}",
++              b"\xa5": br"$\yen$",
++              # b"\xa6": br"\textbrokenbar{}",
++              b"\xac": br"\ensuremath{\lnot}",
++              # "\xad": br"", # FIXME: bug around soft hyphen...
++              b"\xb0": br"\textdegree{}",
++              b"\xb1": br"\ensuremath{\pm}",
++              b"\xb2": br"$^2$",
++              b"\xb3": br"$^3$",
++              b"\xb5": br"$\mathrm{\mu}$",
++              b"\xb9": br"$^1$",
++              b"\xd7": br"$\times$",
++              b"\xf7": br"$\div$"
+               }
+ 
+     def __init__(self, input_encoding="utf8", output_encoding="latin-1",
+@@ -60,7 +62,7 @@ class TexCodec:
+             self.charmap = {}
+             return
+ 
+-        if not(tex_handler_installed.has_key(self._errors)):
++        if not(self._errors in tex_handler_installed):
+             f = self.build_error_func(pre, post, errors)
+             codecs.register_error(self._errors, f)
+             tex_handler_installed[self._errors] = f
+@@ -121,19 +123,20 @@ class LatexCodec(TexCodec):
+             text = text.replace(c, v)
+ 
+         # Things are done, complete with {}
+-        text = text.replace(r"\textbackslash", r"\textbackslash{}")
++        text = text.replace(br"\textbackslash", br"\textbackslash{}")
+         return text
+ 
+ 
+ def main():
+     import sys
+     c = LatexCodec()
+-    f = open(sys.argv[1])
+-    text = ""
++    buf = getattr(sys.stdout, "buffer", sys.stdout)
++    f = open(sys.argv[1], "rb")
++    text = "" if buf == sys.stdout else b""
+     for line in f:
+         text += c.encode(c.decode(line))
+         if text:
+-            sys.stdout.write(text)
++            buf.write(text)
+ 
+ 
+ if __name__ == "__main__":
+diff --git a/lib/dbtexmf/dblatex/texhyphen.py b/lib/dbtexmf/dblatex/texhyphen.py
+index ab3545b..b28e6f8 100644
+--- a/lib/dbtexmf/dblatex/texhyphen.py
++++ b/lib/dbtexmf/dblatex/texhyphen.py
+@@ -2,6 +2,8 @@
+ # dblatex - Hyphenation classes to provide smart hyphenation of path like
+ # strings
+ #
++from __future__ import print_function
++
+ import re
+ 
+ class Hyphenator:
+@@ -18,14 +20,14 @@ class BasicHyphenator(Hyphenator):
+     """
+     def __init__(self, codec=None):
+         self.codec = codec
+-        self.hyphenchar = "\-"
++        self.hyphenchar = b"\-"
+ 
+     def hyphenate(self, text):
+         if self.codec: text = self.codec.decode(text)
+         ntext = "\1".join(list(text))
+         if self.codec: ntext = self.codec.encode(ntext)
+-        ntext = re.sub("\1? \1?", " ", ntext)
+-        ntext = ntext.replace("\1", self.hyphenchar)
++        ntext = re.sub(b"\1? \1?", b" ", ntext)
++        ntext = ntext.replace(b"\1", self.hyphenchar)
+         return ntext
+ 
+ 
+@@ -49,7 +51,7 @@ class UrlHyphenator(Hyphenator):
+     existing latex styles.
+     """
+     def __init__(self, codec=None,
+-                 h_sep="\penalty0 ", h_char="\penalty5000 ",
++                 h_sep=b"\penalty0 ", h_char=b"\penalty5000 ",
+                  h_start=3, h_stop=3):
+         self.codec = codec
+         self.seps = r":/\@=?#;-."
+@@ -84,17 +86,17 @@ class UrlHyphenator(Hyphenator):
+                     nw += "\1".join(list(hword))
+                     nw += w[-self.h_stop:]
+                     nw = self._translate(nw)
+-                    nw = re.sub("\1? \1?", " ", nw)
+-                    nw = nw.replace("\1", self.h_char)
++                    nw = re.sub(b"\1? \1?", b" ", nw)
++                    nw = nw.replace(b"\1", self.h_char)
+                     vtext.append(nw)
+ 
+-        ntext = "".join(vtext)
++        ntext = b"".join(vtext)
+         return ntext
+ 
+ 
+ if __name__ == "__main__":
+-    url = "http://www.fg/foobar fun#fght/fkkkf.tz?id=123"
++    url = b"http://www.fg/foobar fun#fght/fkkkf.tz?id=123"
+     h1 = BasicHyphenator()
+     h2 = UrlHyphenator()
+-    print h1.hyphenate(url)
+-    print h2.hyphenate(url)
++    print(h1.hyphenate(url))
++    print(h2.hyphenate(url))
+diff --git a/lib/dbtexmf/dblatex/xetex/codec.py b/lib/dbtexmf/dblatex/xetex/codec.py
+index 9ef35b9..b4aad2b 100644
+--- a/lib/dbtexmf/dblatex/xetex/codec.py
++++ b/lib/dbtexmf/dblatex/xetex/codec.py
+@@ -3,7 +3,7 @@ import os
+ import codecs
+ 
+ from dbtexmf.dblatex.texcodec import LatexCodec
+-from fsencoder import FontSpecEncoder
++from dbtexmf.dblatex.xetex.fsencoder import FontSpecEncoder
+ 
+ 
+ class XetexCodec(LatexCodec):
+diff --git a/lib/dbtexmf/dblatex/xetex/fcfallback.py b/lib/dbtexmf/dblatex/xetex/fcfallback.py
+index dea9ea2..29c1a44 100644
+--- a/lib/dbtexmf/dblatex/xetex/fcfallback.py
++++ b/lib/dbtexmf/dblatex/xetex/fcfallback.py
+@@ -1,5 +1,7 @@
+-from fontspec import FontSpec
+-from fcmanager import FcManager
++from __future__ import print_function
++
++from dbtexmf.dblatex.xetex.fontspec import FontSpec
++from dbtexmf.dblatex.xetex.fcmanager import FcManager
+ 
+ 
+ class DefaultFontSpec(FontSpec):
+@@ -54,8 +56,8 @@ class FcFallbackFontSpec(DefaultFontSpec):
+         for fontspec in self.fontspecs:
+ 
+             if fontspec in self.fcmissed:
+-                print "Specified font '%s' is missing in the system!" % \
+-                      (fontspec.mainfont())
++                print("Specified font '%s' is missing in the system!" % \
++                      (fontspec.mainfont()))
+                 continue
+ 
+             fcfont = self.fccache.get(fontspec.mainfont()) or \
+diff --git a/lib/dbtexmf/dblatex/xetex/fcmanager.py b/lib/dbtexmf/dblatex/xetex/fcmanager.py
+index b972270..91ed6da 100644
+--- a/lib/dbtexmf/dblatex/xetex/fcmanager.py
++++ b/lib/dbtexmf/dblatex/xetex/fcmanager.py
+@@ -5,12 +5,15 @@
+ # An efficient solution should use some python bindings to directly call the
+ # C fontconfig library.
+ #
++import sys
+ import logging
+ from subprocess import Popen, PIPE
+ 
+ def execute(cmd):
+     p = Popen(cmd, stdout=PIPE)
+     data = p.communicate()[0]
++    if isinstance(data, bytes):
++        data = data.decode(sys.getdefaultencoding())
+     rc = p.wait()
+     if rc != 0:
+         raise OSError("'%s' failed (%d)" % (" ".join(cmd), rc))
+diff --git a/lib/dbtexmf/dblatex/xetex/fontspec.py b/lib/dbtexmf/dblatex/xetex/fontspec.py
+index cd93cde..767d003 100644
+--- a/lib/dbtexmf/dblatex/xetex/fontspec.py
++++ b/lib/dbtexmf/dblatex/xetex/fontspec.py
+@@ -49,7 +49,7 @@ class UnicodeInterval:
+         if m:
+             return int(m.group(1), 16)
+         else:
+-            raise RuntimeError, 'Not a unicode codepoint: ' + codepoint
++            raise RuntimeError('Not a unicode codepoint: ' + codepoint)
+ 
+     def from_char(self, char):
+         """Interval for a single character"""
+@@ -167,7 +167,7 @@ class FontSpec:
+                     intervals.append(
+                         UnicodeInterval().from_codepoint(m.group(1)))
+                 else:
+-                    raise RuntimeError, 'Unable to parse range: "' + range + '"'
++                    raise RuntimeError('Unable to parse range: "' + range + '"')
+         return intervals
+ 
+     def _parse_transitions(self, node, transition_type):
+diff --git a/lib/dbtexmf/dblatex/xetex/fsconfig.py b/lib/dbtexmf/dblatex/xetex/fsconfig.py
+index f62e51e..06c9adf 100644
+--- a/lib/dbtexmf/dblatex/xetex/fsconfig.py
++++ b/lib/dbtexmf/dblatex/xetex/fsconfig.py
+@@ -12,8 +12,8 @@ import re
+ import xml.dom.minidom
+ import logging
+ 
+-from fcfallback import FcFallbackFontSpec, DefaultFontSpec
+-from fontspec import FontSpec, _indent
++from dbtexmf.dblatex.xetex.fcfallback import FcFallbackFontSpec, DefaultFontSpec
++from dbtexmf.dblatex.xetex.fontspec import FontSpec, _indent
+ 
+ 
+ class FontSpecConfig:
+diff --git a/lib/dbtexmf/dblatex/xetex/fsencoder.py b/lib/dbtexmf/dblatex/xetex/fsencoder.py
+index 9960bbe..6175adf 100644
+--- a/lib/dbtexmf/dblatex/xetex/fsencoder.py
++++ b/lib/dbtexmf/dblatex/xetex/fsencoder.py
+@@ -7,12 +7,14 @@ Provide an encoder for a font specification configuration: the encoder is fed
+ with Unicode characters one by one and determines the needed font switches
+ between the preceding and the current character.
+ """
++from __future__ import print_function
++
+ import sys
+ import re
+ import xml.dom.minidom
+ 
+-from fontspec import UnicodeInterval
+-from fsconfig import FontSpecConfig
++from dbtexmf.dblatex.xetex.fontspec import UnicodeInterval
++from dbtexmf.dblatex.xetex.fsconfig import FontSpecConfig
+ 
+ 
+ class FontSpecEncoder:
+@@ -68,7 +70,7 @@ class FontSpecEncoder:
+         """
+         fontspec = self._cur_fontspec or self._conf.default_fontspec
+ 
+-        print >>sys.stderr, "Current:", fontspec.id
++        print("Current:", fontspec.id, file=sys.stderr)
+         fontspec = fontspec.match(char)
+         while not(fontspec):
+             leaf = self._ref_stack.pop()
+diff --git a/lib/dbtexmf/xslt/4xslt.py b/lib/dbtexmf/xslt/4xslt.py
+index 4af729f..3746fce 100644
+--- a/lib/dbtexmf/xslt/4xslt.py
++++ b/lib/dbtexmf/xslt/4xslt.py
+@@ -3,6 +3,7 @@
+ #
+ import sys
+ import os
++from io import open
+ 
+ from Ft.Xml.Xslt import Processor
+ from Ft.Lib.Uri import OsPathToUri
+@@ -49,7 +50,7 @@ class FourXslt:
+         uri =  OsPathToUri(xslfile)
+         xslt = factory.fromUri(uri,  processIncludes=False)
+ 
+-        o = open(outfile, "w")
++        o = open(outfile, "wb")
+         proc.appendStylesheet(xslt)
+         if params:
+             rc = proc.run(xml, outputStream=o, topLevelParams=params)
+diff --git a/lib/dbtexmf/xslt/xsltproc.py b/lib/dbtexmf/xslt/xsltproc.py
+index 38f1d2b..db72a87 100644
+--- a/lib/dbtexmf/xslt/xsltproc.py
++++ b/lib/dbtexmf/xslt/xsltproc.py
+@@ -2,6 +2,7 @@
+ # Basic wrapper for xsltproc. Maybe we should directly use the lixslt Python
+ # API.
+ #
++import sys
+ import os
+ import logging
+ import re
+@@ -43,6 +44,8 @@ class XsltProc:
+         # check that with help output the option is there
+         p = Popen(["xsltproc"], stdout=PIPE)
+         data = p.communicate()[0]
++        if isinstance(data, bytes):
++            data = data.decode(sys.getdefaultencoding())
+         m = re.search("--xincludestyle", data, re.M)
+         if not(m):
+             return False
+diff --git a/setup.py b/setup.py
+index 5af4cfb..379323b 100644
+--- a/setup.py
++++ b/setup.py
+@@ -3,11 +3,14 @@
+ #
+ # dblatex python setup script - See the COPYRIGHT
+ #
++from __future__ import print_function
++
+ import os
+ import sys
+ import re
+ import glob
+ import subprocess
++from io import open
+ 
+ try:
+     from setuptools import setup
+@@ -83,7 +86,7 @@ os.environ["SGML_CATALOG_FILES"] = cat
+         self._catalogs = install.catalogs
+         self._style = install.style
+         self._use_py_path = install.use_python_path
+-        print self._package_base
++        print(self._package_base)
+ 
+         # Build the command line script
+         self.build_script()
+@@ -162,8 +165,8 @@ os.environ["SGML_CATALOG_FILES"] = cat
+         script = self.SHELL_SCRIPT % script_args
+         script_name = os.path.basename(script_name)
+         outfile = os.path.join(self.build_dir, script_name)
+-        fd = os.open(outfile, os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0755)
+-        os.write(fd, script)
++        fd = os.open(outfile, os.O_WRONLY|os.O_CREAT|os.O_TRUNC, 0o755)
++        os.write(fd, script.encode('ascii'))
+         os.close(fd)
+ 
+ 
+@@ -225,8 +228,10 @@ def kpsewhich(tex_file):
+         close_fds = True
+     p = Popen("kpsewhich %s" % tex_file, shell=True,
+               stdin=PIPE, stdout=PIPE, close_fds=close_fds)
+-    out = "".join(p.stdout.readlines()).strip()
+-    return out
++    data = p.communicate()[0]
++    if isinstance(data, bytes):
++        data = data.decode(sys.getdefaultencoding())
++    return data.strip()
+ 
+ 
+ class Sdist(sdist):
+@@ -260,19 +265,19 @@ class Install(install):
+         # First, check non critical graphic tools
+         found, missed = find_programs(("epstopdf", "convert", "fig2dev"))
+         for util in found:
+-            print "+checking %s... yes" % util
++            print("+checking %s... yes" % util)
+         for util in missed:
+-            print "+checking %s... no" % util
++            print("+checking %s... no" % util)
+         if missed:
+-            print("warning: not found: %s" % ", ".join(missed))
++            print(("warning: not found: %s" % ", ".join(missed)))
+ 
+         # Now, be serious
+         found, missed = find_programs(("latex", "makeindex",
+                                        "pdflatex", "kpsewhich"))
+         for util in found:
+-            print "+checking %s... yes" % util
++            print("+checking %s... yes" % util)
+         for util in missed:
+-            print "+checking %s... no" % util
++            print("+checking %s... no" % util)
+         if missed:
+             raise OSError("not found: %s" % ", ".join(missed))
+ 
+@@ -292,21 +297,21 @@ class Install(install):
+         for (mod, deplist) in deplists:
+             if not(deplist):
+                 xslt_found.append(mod)
+-                print "+checking XSLT %s... yes" % mod
++                print("+checking XSLT %s... yes" % mod)
+                 continue
+             found, missed = find_programs(deplist)
+             if missed:
+                 xslt_missed.append(mod)
+-                print "+checking XSLT %s... no (missing %s)" % \
+-                      (mod, ", ".join(missed))
++                print("+checking XSLT %s... no (missing %s)" % \
++                      (mod, ", ".join(missed)))
+             else:
+                 xslt_found.append(mod)
+-                print "+checking XSLT %s... yes" % mod
++                print("+checking XSLT %s... yes" % mod)
+ 
+         if not(xslt_found):
+             raise OSError("XSLT not installed: %s" % ", ".join(xslt_missed))
+         elif xslt_missed:
+-            print "warning: XSLT not found: %s" % ", ".join(xslt_missed)
++            print("warning: XSLT not found: %s" % ", ".join(xslt_missed))
+ 
+     def check_latex_dependencies(self):
+         # Find the Latex files from the package
+@@ -322,7 +327,7 @@ class Install(install):
+         used_stys = []
+         re_sty = re.compile(r"\\usepackage\s*\[?.*\]?{(\w+)}")
+         for sty in stys:
+-            f = open(sty)
++            f = open(sty, "rt", encoding="latin-1")
+             for line in f:
+                 line = line.split("%")[0]
+                 m = re_sty.search(line)
+@@ -353,7 +358,7 @@ class Install(install):
+             if sty in own_stys:
+                 status += "found in package"
+                 found_stys.append(sty)
+-                print status
++                print(status)
+                 continue
+             stypath = kpsewhich("%s.sty" % sty)
+             if stypath:
+@@ -362,7 +367,7 @@ class Install(install):
+             else:
+                 status += "no"
+                 mis_stys.append(sty)
+-            print status
++            print(status)
+             
+         if mis_stys:
+             raise OSError("not found: %s" % ", ".join(mis_stys))
+@@ -378,8 +383,8 @@ class Install(install):
+                 self.check_xslt_dependencies()
+                 self.check_util_dependencies()
+                 self.check_latex_dependencies()
+-            except Exception, e:
+-                print >>sys.stderr, "Error: %s" % e
++            except Exception as e:
++                print("Error: %s" % e, file=sys.stderr)
+                 sys.exit(1)
+ 
+         if db: db.adapt_paths()
+@@ -450,17 +455,17 @@ class InstallData(install_data):
+             return
+ 
+         # Grab the value from package version
+-        d = open(hyper_sty).read()
+-        m = re.search("\\ProvidesPackage{hyperref}\s+\[(\d+)", d, re.M)
++        d = open(hyper_sty, "rt", encoding="latin-1").read()
++        m = re.search(r"\\ProvidesPackage{hyperref}\s+\[(\d+)", d, re.M)
+         if not(m):
+             return
+         year = m.group(1)
+ 
+         # Patch the parameter with the found value
+-        p = open(param_file).read()
++        p = open(param_file, "rt", encoding="latin-1").read()
+         p2 = re.sub('name="texlive.version">.*<',
+                     'name="texlive.version">%s<' % year, p)
+-        f = open(param_file, "w")
++        f = open(param_file, "wt", encoding="latin-1")
+         f.write(p2)
+         f.close()
+ 
+-- 
+2.17.1
+
