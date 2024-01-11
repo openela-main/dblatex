@@ -1,0 +1,75 @@
+From 11df13b7bfe0de918754d61dd431cad5c6349d39 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Nikola=20Forr=C3=B3?= <nforro@redhat.com>
+Date: Tue, 26 Jun 2018 18:11:24 +0200
+Subject: [PATCH 4/4] Fix shebangs
+
+---
+ lib/dbtexmf/dblatex/xetex/fontspec.py  | 2 +-
+ lib/dbtexmf/dblatex/xetex/fsconfig.py  | 2 +-
+ lib/dbtexmf/dblatex/xetex/fsencoder.py | 2 +-
+ scripts/dblatex                        | 2 +-
+ setup.py                               | 4 ++--
+ 5 files changed, 6 insertions(+), 6 deletions(-)
+
+diff --git a/lib/dbtexmf/dblatex/xetex/fontspec.py b/lib/dbtexmf/dblatex/xetex/fontspec.py
+index 767d003..da6a3e0 100644
+--- a/lib/dbtexmf/dblatex/xetex/fontspec.py
++++ b/lib/dbtexmf/dblatex/xetex/fontspec.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ # Time-stamp: <2008-06-23 22:21:26 ah>
+ 
+diff --git a/lib/dbtexmf/dblatex/xetex/fsconfig.py b/lib/dbtexmf/dblatex/xetex/fsconfig.py
+index 06c9adf..0477d35 100644
+--- a/lib/dbtexmf/dblatex/xetex/fsconfig.py
++++ b/lib/dbtexmf/dblatex/xetex/fsconfig.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ # Time-stamp: <2008-06-23 22:21:26 ah>
+ 
+diff --git a/lib/dbtexmf/dblatex/xetex/fsencoder.py b/lib/dbtexmf/dblatex/xetex/fsencoder.py
+index 6175adf..48a0fd2 100644
+--- a/lib/dbtexmf/dblatex/xetex/fsencoder.py
++++ b/lib/dbtexmf/dblatex/xetex/fsencoder.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: utf-8 -*-
+ # Time-stamp: <2008-06-23 22:21:26 ah>
+ 
+diff --git a/scripts/dblatex b/scripts/dblatex
+index aa199d0..a42ea49 100755
+--- a/scripts/dblatex
++++ b/scripts/dblatex
+@@ -1,4 +1,4 @@
+-#! /usr/bin/env python
++#! /usr/bin/python3
+ import sys
+ import os
+ 
+diff --git a/setup.py b/setup.py
+index 799c1d2..0881d58 100644
+--- a/setup.py
++++ b/setup.py
+@@ -1,4 +1,4 @@
+-#!/usr/bin/env python
++#!/usr/bin/python3
+ # -*- coding: ISO-8859-1 -*-
+ #
+ # dblatex python setup script - See the COPYRIGHT
+@@ -33,7 +33,7 @@ sys.path.append("lib")
+ #
+ class BuildScripts(build_scripts):
+ 
+-    SHELL_SCRIPT = """#!%(env_executable)s%(env_args)s%(py_executable)s
++    SHELL_SCRIPT = """#!/usr/bin/python3
+ import sys
+ import os
+ 
+-- 
+2.17.1
+
